@@ -102,147 +102,156 @@ static const uint8_t font5x7[][5] = {
 };
 
 void ssd1306_send_cmd(ssd1306_t *disp, uint8_t cmd) {
-    uint8_t buf[2] = {0x00, cmd};
-    i2c_write_blocking(disp->i2c, disp->addr, buf, 2, false);
+  uint8_t buf[2] = {0x00, cmd};
+  i2c_write_blocking(disp->i2c, disp->addr, buf, 2, false);
 }
 
-bool ssd1306_init(ssd1306_t *disp, i2c_inst_t *i2c, uint8_t addr, uint sda_pin, uint scl_pin) {
-    disp->i2c = i2c;
-    disp->addr = addr;
+bool ssd1306_init(ssd1306_t *disp, i2c_inst_t *i2c, uint8_t addr, uint sda_pin,
+                  uint scl_pin) {
+  disp->i2c = i2c;
+  disp->addr = addr;
 
-    // Power-on delay for display controller hardware to stabilize
-    sleep_ms(200);
+  // Power-on delay for display controller hardware to stabilize
+  sleep_ms(200);
 
-    // Set pin functions and pull-ups before initializing I2C hardware
-    gpio_set_function(sda_pin, GPIO_FUNC_I2C);
-    gpio_set_function(scl_pin, GPIO_FUNC_I2C);
-    gpio_pull_up(sda_pin);
-    gpio_pull_up(scl_pin);
+  // Set pin functions and pull-ups before initializing I2C hardware
+  gpio_set_function(sda_pin, GPIO_FUNC_I2C);
+  gpio_set_function(scl_pin, GPIO_FUNC_I2C);
+  gpio_pull_up(sda_pin);
+  gpio_pull_up(scl_pin);
 
-    // Initialize I2C peripheral at 100kHz for maximum signal stability
-    i2c_init(disp->i2c, 100 * 1000);
+  // Initialize I2C peripheral at 100kHz for maximum signal stability
+  i2c_init(disp->i2c, 100 * 1000);
 
-    // Scan I2C addresses to locate GM12864 (ST7567: 0x3F/0x3E, SSD1306: 0x3C/0x3D)
-    uint8_t test_addrs[] = {0x3F, 0x3C, 0x3D, 0x3E};
-    bool found = false;
-    uint8_t dummy = 0x00;
+  // Scan I2C addresses to locate GM12864 (ST7567: 0x3F/0x3E, SSD1306:
+  // 0x3C/0x3D)
+  uint8_t test_addrs[] = {0x3F, 0x3C, 0x3D, 0x3E};
+  bool found = false;
+  uint8_t dummy = 0x00;
 
-    if (i2c_write_blocking(disp->i2c, disp->addr, &dummy, 1, false) >= 0) {
+  if (i2c_write_blocking(disp->i2c, disp->addr, &dummy, 1, false) >= 0) {
+    found = true;
+  } else {
+    for (size_t i = 0; i < sizeof(test_addrs); i++) {
+      if (i2c_write_blocking(disp->i2c, test_addrs[i], &dummy, 1, false) >= 0) {
+        disp->addr = test_addrs[i];
         found = true;
-    } else {
-        for (size_t i = 0; i < sizeof(test_addrs); i++) {
-            if (i2c_write_blocking(disp->i2c, test_addrs[i], &dummy, 1, false) >= 0) {
-                disp->addr = test_addrs[i];
-                found = true;
-                break;
-            }
-        }
+        break;
+      }
     }
+  }
 
-    if (!found) {
-        // Full bus scan from 0x08 to 0x77
-        for (uint8_t a = 0x08; a < 0x78; a++) {
-            if (i2c_write_blocking(disp->i2c, a, &dummy, 1, false) >= 0) {
-                disp->addr = a;
-                found = true;
-                break;
-            }
-        }
+  if (!found) {
+    // Full bus scan from 0x08 to 0x77
+    for (uint8_t a = 0x08; a < 0x78; a++) {
+      if (i2c_write_blocking(disp->i2c, a, &dummy, 1, false) >= 0) {
+        disp->addr = a;
+        found = true;
+        break;
+      }
     }
+  }
 
-    printf("I2C Display search result: %s (Address: 0x%02X)\n", found ? "FOUND" : "NOT FOUND", disp->addr);
+  printf("I2C Display search result: %s (Address: 0x%02X)\n",
+         found ? "FOUND" : "NOT FOUND", disp->addr);
 
-    // Universal Initialization sequence:
-    // Supports ST7567 / ST7567S (GM12864 LCD) AND SSD1306 / SH1106 (OLED)
-    static const uint8_t init_cmds[] = {
-        0xE2,       // ST7567: Software Reset
-        0xAE,       // Display OFF
-        0xA2,       // ST7567: Set LCD Bias (1/9 bias)
-        0xA0,       // ADC Select: Normal direction
-        0xC8,       // COM Output Scan Direction: Reverse (C8)
-        0x25,       // ST7567: V0 Voltage Regulator Internal Resistor Ratio (0x25)
-        0x81, 0x2B, // Set Electronic Volume / Contrast (0x81, 0x2B)
-        0x2F,       // ST7567: Power Control (Booster + Regulator + Follower ON - CRITICAL FOR ST7567 LCD!)
-        0x8D, 0x14, // SSD1306: Enable Charge Pump
-        0xD5, 0x80, // SSD1306: Set Display Clock Divide Ratio
-        0xA8, 0x3F, // SSD1306: Set Multiplex Ratio (63)
-        0xD3, 0x00, // SSD1306: Set Display Offset (0)
-        0xDA, 0x12, // SSD1306: Set COM Pins Config
-        0x40,       // Set Display Start Line -> 0
-        0xA4,       // Entire Display ON (Resume from RAM)
-        0xA6,       // Set Normal Display (non-inverted)
-        0xAF        // Display ON
-    };
+  // Universal Initialization sequence:
+  // Supports ST7567 / ST7567S (GM12864 LCD) AND SSD1306 / SH1106 (OLED)
+  static const uint8_t init_cmds[] = {
+      0xE2,       // ST7567: Software Reset
+      0xAE,       // Display OFF
+      0xA2,       // ST7567: Set LCD Bias (1/9 bias)
+      0xA0,       // ADC Select: Normal direction
+      0xC8,       // COM Output Scan Direction: Reverse (C8)
+      0x25,       // ST7567: V0 Voltage Regulator Internal Resistor Ratio (0x25)
+      0x81, 0x2B, // Set Electronic Volume / Contrast (0x81, 0x2B)
+      0x20,       // ST7567: Power Control (Booster + Regulator + Follower ON -
+                  // CRITICAL FOR ST7567 LCD!)
+      0x8D, 0x14, // SSD1306: Enable Charge Pump
+      0xD5, 0x80, // SSD1306: Set Display Clock Divide Ratio
+      0xA8, 0x3F, // SSD1306: Set Multiplex Ratio (63)
+      0xD3, 0x00, // SSD1306: Set Display Offset (0)
+      0xDA, 0x12, // SSD1306: Set COM Pins Config
+      0x40,       // Set Display Start Line -> 0
+      0xA4,       // Entire Display ON (Resume from RAM)
+      0xA6,       // Set Normal Display (non-inverted)
+      0xAF        // Display ON
+  };
 
-    for (size_t i = 0; i < sizeof(init_cmds); i++) {
-        ssd1306_send_cmd(disp, init_cmds[i]);
-    }
+  for (size_t i = 0; i < sizeof(init_cmds); i++) {
+    ssd1306_send_cmd(disp, init_cmds[i]);
+  }
 
-    ssd1306_clear(disp);
-    ssd1306_show(disp);
-    return found;
+  ssd1306_clear(disp);
+  ssd1306_show(disp);
+  return found;
 }
 
 void ssd1306_clear(ssd1306_t *disp) {
-    memset(disp->buffer, 0x00, SSD1306_BUF_SIZE);
+  memset(disp->buffer, 0x00, SSD1306_BUF_SIZE);
 }
 
 void ssd1306_draw_pixel(ssd1306_t *disp, int x, int y, bool color) {
-    if (x < 0 || x >= SSD1306_WIDTH || y < 0 || y >= SSD1306_HEIGHT) {
-        return;
-    }
-    int page = y / 8;
-    int bit = y % 8;
-    int index = x + page * SSD1306_WIDTH;
+  if (x < 0 || x >= SSD1306_WIDTH || y < 0 || y >= SSD1306_HEIGHT) {
+    return;
+  }
+  int page = y / 8;
+  int bit = y % 8;
+  int index = x + page * SSD1306_WIDTH;
 
-    if (color) {
-        disp->buffer[index] |= (1 << bit);
-    } else {
-        disp->buffer[index] &= ~(1 << bit);
-    }
+  if (color) {
+    disp->buffer[index] |= (1 << bit);
+  } else {
+    disp->buffer[index] &= ~(1 << bit);
+  }
 }
 
 void ssd1306_draw_char(ssd1306_t *disp, int x, int y, char c) {
-    if (c < ' ' || c > '~') {
-        c = '?';
+  if (c < ' ' || c > '~') {
+    c = '?';
+  }
+  int font_idx = c - ' ';
+  for (int i = 0; i < 5; i++) {
+    uint8_t line = font5x7[font_idx][i];
+    for (int j = 0; j < 8; j++) {
+      if (line & (1 << j)) {
+        ssd1306_draw_pixel(disp, x + i, y + j, true);
+      }
     }
-    int font_idx = c - ' ';
-    for (int i = 0; i < 5; i++) {
-        uint8_t line = font5x7[font_idx][i];
-        for (int j = 0; j < 8; j++) {
-            if (line & (1 << j)) {
-                ssd1306_draw_pixel(disp, x + i, y + j, true);
-            }
-        }
-    }
+  }
 }
 
 void ssd1306_draw_string(ssd1306_t *disp, int x, int y, const char *str) {
-    int cur_x = x;
-    while (*str) {
-        if (cur_x + 5 >= SSD1306_WIDTH) {
-            cur_x = x;
-            y += 8;
-        }
-        if (y >= SSD1306_HEIGHT) {
-            break;
-        }
-        ssd1306_draw_char(disp, cur_x, y, *str);
-        cur_x += 6; // 5 pixels width + 1 pixel spacing
-        str++;
+  int cur_x = x;
+  while (*str) {
+    if (cur_x + 5 >= SSD1306_WIDTH) {
+      cur_x = x;
+      y += 8;
     }
+    if (y >= SSD1306_HEIGHT) {
+      break;
+    }
+    ssd1306_draw_char(disp, cur_x, y, *str);
+    cur_x += 6; // 5 pixels width + 1 pixel spacing
+    str++;
+  }
 }
 
 void ssd1306_show(ssd1306_t *disp) {
-    for (uint8_t page = 0; page < 8; page++) {
-        ssd1306_send_cmd(disp, 0xB0 + page); // Set page start address
-        ssd1306_send_cmd(disp, 0x00);        // Set lower column address
-        ssd1306_send_cmd(disp, 0x10);        // Set higher column address
+  for (uint8_t page = 0; page < 8; page++) {
+    ssd1306_send_cmd(disp, 0xB0 + page); // Set page start address
+    ssd1306_send_cmd(disp, 0x00);        // Set lower column address
+    ssd1306_send_cmd(disp, 0x10);        // Set higher column address
 
-        uint8_t payload[129];
-        payload[0] = 0x40; // Data mode control byte
-        memcpy(&payload[1], &disp->buffer[page * 128], 128);
+    uint8_t payload[129];
+    payload[0] = 0x40; // Data mode control byte
+    memcpy(&payload[1], &disp->buffer[page * 128], 128);
 
-        i2c_write_blocking(disp->i2c, disp->addr, payload, sizeof(payload), false);
-    }
+    i2c_write_blocking(disp->i2c, disp->addr, payload, sizeof(payload), false);
+  }
+}
+
+void ssd1306_set_contrast(ssd1306_t *disp, uint8_t contrast) {
+  ssd1306_send_cmd(disp, 0x81);
+  ssd1306_send_cmd(disp, contrast);
 }

@@ -38,4 +38,7 @@ void ssd1306_draw_string(ssd1306_t *disp, int x, int y, const char *str);
 // Flush framebuffer content to GM12864 / SSD1306 display via I2C
 void ssd1306_show(ssd1306_t *disp);
 
+// Set display brightness / contrast (contrast: 0x00 to 0x3F for ST7567 LCD, 0x00 to 0xFF for SSD1306 OLED)
+void ssd1306_set_contrast(ssd1306_t *disp, uint8_t contrast);
+
 #endif // SSD1306_H

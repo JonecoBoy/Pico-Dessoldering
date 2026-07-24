@@ -27,9 +27,10 @@ int main() {
   // Create display context object
   ssd1306_t disp;
 
-  // Initialize display on i2c0 with auto-detection for GM12864 / ST7567 / SSD1306
-  bool disp_ok = ssd1306_init(&disp, I2C_PORT, SSD1306_DEFAULT_I2C_ADDR, I2C_SDA_PIN,
-               I2C_SCL_PIN);
+  // Initialize display on i2c0 with auto-detection for GM12864 / ST7567 /
+  // SSD1306
+  bool disp_ok = ssd1306_init(&disp, I2C_PORT, SSD1306_DEFAULT_I2C_ADDR,
+                              I2C_SDA_PIN, I2C_SCL_PIN);
 
   if (!disp_ok) {
     // Display not detected on I2C bus -> Warning: 2 short beeps
