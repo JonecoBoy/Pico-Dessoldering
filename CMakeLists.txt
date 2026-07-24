@@ -57,6 +57,7 @@ target_include_directories(Pico-Dessoldering PRIVATE
 target_link_libraries(Pico-Dessoldering 
         hardware_spi
         hardware_i2c
+        hardware_adc
         )
 
 pico_add_extra_outputs(Pico-Dessoldering)

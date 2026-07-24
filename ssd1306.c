@@ -125,7 +125,7 @@ bool ssd1306_init(ssd1306_t *disp, i2c_inst_t *i2c, uint8_t addr, uint sda_pin,
 
   // Scan I2C addresses to locate GM12864 (ST7567: 0x3F/0x3E, SSD1306:
   // 0x3C/0x3D)
-  uint8_t test_addrs[] = {0x3F, 0x3C, 0x3D, 0x3E};
+  uint8_t test_addrs[] = {0x3C, 0x3D, 0x3F, 0x3E};
   bool found = false;
   uint8_t dummy = 0x00;
 
@@ -155,31 +155,48 @@ bool ssd1306_init(ssd1306_t *disp, i2c_inst_t *i2c, uint8_t addr, uint sda_pin,
   printf("I2C Display search result: %s (Address: 0x%02X)\n",
          found ? "FOUND" : "NOT FOUND", disp->addr);
 
-  // Universal Initialization sequence:
-  // Supports ST7567 / ST7567S (GM12864 LCD) AND SSD1306 / SH1106 (OLED)
-  static const uint8_t init_cmds[] = {
-      0xE2,       // ST7567: Software Reset
-      0xAE,       // Display OFF
-      0xA2,       // ST7567: Set LCD Bias (1/9 bias)
-      0xA0,       // ADC Select: Normal direction
-      0xC8,       // COM Output Scan Direction: Reverse (C8)
-      0x25,       // ST7567: V0 Voltage Regulator Internal Resistor Ratio (0x25)
-      0x81, 0x2B, // Set Electronic Volume / Contrast (0x81, 0x2B)
-      0x20,       // ST7567: Power Control (Booster + Regulator + Follower ON -
-                  // CRITICAL FOR ST7567 LCD!)
-      0x8D, 0x14, // SSD1306: Enable Charge Pump
-      0xD5, 0x80, // SSD1306: Set Display Clock Divide Ratio
-      0xA8, 0x3F, // SSD1306: Set Multiplex Ratio (63)
-      0xD3, 0x00, // SSD1306: Set Display Offset (0)
-      0xDA, 0x12, // SSD1306: Set COM Pins Config
-      0x40,       // Set Display Start Line -> 0
-      0xA4,       // Entire Display ON (Resume from RAM)
-      0xA6,       // Set Normal Display (non-inverted)
-      0xAF        // Display ON
-  };
-
-  for (size_t i = 0; i < sizeof(init_cmds); i++) {
-    ssd1306_send_cmd(disp, init_cmds[i]);
+  if (disp->addr == 0x3F || disp->addr == 0x3E) {
+    // ST7567 LCD init sequence
+    static const uint8_t st7567_cmds[] = {
+        0xE2,       // Software Reset
+        0xAE,       // Display OFF
+        0xA2,       // Set LCD Bias (1/9 bias)
+        0xA0,       // ADC Select Normal
+        0xC8,       // COM Scan Reverse
+        0x25,       // Resistor Ratio 5
+        0x81, 0x20, // Electronic Volume / Contrast
+        0x2F,       // Power Control (Booster, Regulator, Follower ON)
+        0x40,       // Start Line 0
+        0xA4,       // Entire Display ON
+        0xA6,       // Normal Display
+        0xAF        // Display ON
+    };
+    for (size_t i = 0; i < sizeof(st7567_cmds); i++) {
+      ssd1306_send_cmd(disp, st7567_cmds[i]);
+    }
+  } else {
+    // SSD1306 / SH1106 OLED init sequence
+    static const uint8_t ssd1306_cmds[] = {
+        0xAE,       // Display OFF
+        0xD5, 0x80, // Set Display Clock Divide Ratio
+        0xA8, 0x3F, // Set Multiplex Ratio (63)
+        0xD3, 0x00, // Set Display Offset (0)
+        0x40,       // Set Display Start Line (0)
+        0x8D, 0x14, // Enable Charge Pump (CRITICAL FOR SSD1306 OLED!)
+        0x20, 0x02, // Set Memory Addressing Mode to Page Addressing Mode (0x02)
+        0xA1,       // Set Segment Re-map (0xA1)
+        0xC8,       // Set COM Output Scan Direction (0xC8)
+        0xDA, 0x12, // Set COM Pins Config
+        0x81, 0xCF, // Set Contrast (0xCF)
+        0xD9, 0xF1, // Set Pre-charge Period
+        0xDB, 0x40, // Set VCOMH Deselect Level
+        0xA4,       // Entire Display ON (Resume RAM)
+        0xA6,       // Normal Display
+        0xAF        // Display ON
+    };
+    for (size_t i = 0; i < sizeof(ssd1306_cmds); i++) {
+      ssd1306_send_cmd(disp, ssd1306_cmds[i]);
+    }
   }
 
   ssd1306_clear(disp);
