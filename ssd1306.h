@@ -1,10 +1,10 @@
 #ifndef SSD1306_H
 #define SSD1306_H
 
-#include <stdint.h>
-#include <stdbool.h>
-#include "pico/stdlib.h"
 #include "hardware/i2c.h"
+#include "pico/stdlib.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 #define SSD1306_WIDTH 128
 #define SSD1306_HEIGHT 64
@@ -12,13 +12,16 @@
 #define SSD1306_DEFAULT_I2C_ADDR 0x3C
 
 typedef struct {
-    i2c_inst_t *i2c;
-    uint8_t addr;
-    uint8_t buffer[SSD1306_BUF_SIZE];
+  i2c_inst_t *i2c;
+  uint8_t addr;
+  uint8_t buffer[SSD1306_BUF_SIZE];
+  uint8_t sda_pin;
+  uint8_t scl_pin;
 } ssd1306_t;
 
 // Initialize I2C hardware and send display initialization commands
-bool ssd1306_init(ssd1306_t *disp, i2c_inst_t *i2c, uint8_t addr, uint sda_pin, uint scl_pin);
+bool ssd1306_init(ssd1306_t *disp, i2c_inst_t *i2c, uint8_t addr, uint sda_pin,
+                  uint scl_pin);
 
 // Send command byte to display
 void ssd1306_send_cmd(ssd1306_t *disp, uint8_t cmd);
@@ -38,7 +41,8 @@ void ssd1306_draw_string(ssd1306_t *disp, int x, int y, const char *str);
 // Flush framebuffer content to GM12864 / SSD1306 display via I2C
 void ssd1306_show(ssd1306_t *disp);
 
-// Set display brightness / contrast (contrast: 0x00 to 0x3F for ST7567 LCD, 0x00 to 0xFF for SSD1306 OLED)
+// Set display brightness / contrast (contrast: 0x00 to 0x3F for ST7567 LCD,
+// 0x00 to 0xFF for SSD1306 OLED)
 void ssd1306_set_contrast(ssd1306_t *disp, uint8_t contrast);
 
 #endif // SSD1306_H

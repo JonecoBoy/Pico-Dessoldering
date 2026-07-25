@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 
+// Previous framebuffer copy used to skip unchanged pages during `ssd1306_show()`
+static uint8_t prev_buffer[SSD1306_BUF_SIZE];
+
 // Standard 5x7 Font Table (ASCII 0x20 to 0x7E)
 static const uint8_t font5x7[][5] = {
     {0x00, 0x00, 0x00, 0x00, 0x00}, //   0x20 (Space)
@@ -101,15 +104,33 @@ static const uint8_t font5x7[][5] = {
     {0x10, 0x08, 0x08, 0x10, 0x08}  // ~ 0x7E
 };
 
+static inline bool i2c_write_safe(ssd1306_t *disp, const uint8_t *buf,
+                                  size_t len) {
+
+  int rc = i2c_write_blocking(disp->i2c, disp->addr, buf, len, false);
+  if (rc < 0) {
+    // Reset the I²C peripheral to recover from a NACK
+    i2c_deinit(disp->i2c);
+    i2c_init(disp->i2c, 100 * 1000);
+    // Pin configuration stays the same; just ensure pull‑ups
+    gpio_pull_up(disp->sda_pin);
+    gpio_pull_up(disp->scl_pin);
+    return false;
+  }
+  return true;
+}
+
 void ssd1306_send_cmd(ssd1306_t *disp, uint8_t cmd) {
   uint8_t buf[2] = {0x00, cmd};
-  i2c_write_blocking(disp->i2c, disp->addr, buf, 2, false);
+  i2c_write_safe(disp, buf, 2);
 }
 
 bool ssd1306_init(ssd1306_t *disp, i2c_inst_t *i2c, uint8_t addr, uint sda_pin,
                   uint scl_pin) {
   disp->i2c = i2c;
   disp->addr = addr;
+  disp->sda_pin = sda_pin;
+  disp->scl_pin = scl_pin;
 
   // Power-on delay for display controller hardware to stabilize
   sleep_ms(200);
@@ -200,6 +221,8 @@ bool ssd1306_init(ssd1306_t *disp, i2c_inst_t *i2c, uint8_t addr, uint sda_pin,
   }
 
   ssd1306_clear(disp);
+  // Force previous buffer to an impossible value so first show writes all pages
+  memset(prev_buffer, 0xFF, SSD1306_BUF_SIZE);
   ssd1306_show(disp);
   return found;
 }
@@ -255,16 +278,26 @@ void ssd1306_draw_string(ssd1306_t *disp, int x, int y, const char *str) {
 }
 
 void ssd1306_show(ssd1306_t *disp) {
-  for (uint8_t page = 0; page < 8; page++) {
+  for (uint8_t page = 0; page < (SSD1306_BUF_SIZE / SSD1306_WIDTH); page++) {
+    uint8_t *cur = &disp->buffer[page * SSD1306_WIDTH];
+    uint8_t *prev = &prev_buffer[page * SSD1306_WIDTH];
+    // If this page hasn't changed since last show, skip I2C transfer
+    if (memcmp(cur, prev, SSD1306_WIDTH) == 0) {
+      continue;
+    }
+
     ssd1306_send_cmd(disp, 0xB0 + page); // Set page start address
     ssd1306_send_cmd(disp, 0x00);        // Set lower column address
     ssd1306_send_cmd(disp, 0x10);        // Set higher column address
 
     uint8_t payload[129];
     payload[0] = 0x40; // Data mode control byte
-    memcpy(&payload[1], &disp->buffer[page * 128], 128);
+    memcpy(&payload[1], cur, SSD1306_WIDTH);
 
-    i2c_write_blocking(disp->i2c, disp->addr, payload, sizeof(payload), false);
+    if (i2c_write_safe(disp, payload, sizeof(payload))) {
+      // Update cached previous page only on successful write
+      memcpy(prev, cur, SSD1306_WIDTH);
+    }
   }
 }
 
