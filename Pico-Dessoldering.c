@@ -85,7 +85,7 @@ int main() {
   }
 
   // Setup non-blocking display refresh timing (1 second)
-  const uint64_t refresh_interval_us = 2000000u; // 1s
+  const uint64_t refresh_interval_us = 1000000u; // 1s
   uint64_t next_refresh_us = time_us_64() + refresh_interval_us;
 
   while (true) {
