@@ -11,6 +11,8 @@
 #define I2C_SCL_PIN 5
 
 #define BUZZER_PIN 15
+#define PUMP_PIN 3
+#define IRON_PIN 2
 #define BUTTON_PIN 16
 #define BUTTON2_PIN 1
 
@@ -36,6 +38,10 @@ int main() {
   gpio_init(BUZZER_PIN);
   gpio_set_dir(BUZZER_PIN, GPIO_OUT);
   gpio_put(BUZZER_PIN, 0);
+
+  gpio_init(PUMP_PIN);
+  gpio_set_dir(PUMP_PIN, GPIO_OUT);
+  gpio_put(PUMP_PIN, 0);
 
   // Initialize Button inputs on GPIO16 and GPIO1 (Internal Pull-Up, active LOW)
   gpio_init(BUTTON_PIN);
@@ -107,8 +113,9 @@ int main() {
     uint16_t adc_knob = adc_read();
     float voltage_knob = adc_knob * (3.3f / 4095.0f);
 
-    // Sound buzzer when button is pressed
+    // Sound buzzer and activate pump when button is pressed
     gpio_put(BUZZER_PIN, button_pressed);
+    gpio_put(PUMP_PIN, button_pressed);
 
     // Update only dynamic parts of the display on the refresh interval
     if (display_ready) {
