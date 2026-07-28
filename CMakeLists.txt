@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(Pico-Dessoldering Pico-Dessoldering.c ssd1306.c)
+add_executable(Pico-Dessoldering src/Pico-Dessoldering.c src/ssd1306.c)
 
 pico_set_program_name(Pico-Dessoldering "Pico-Dessoldering")
 pico_set_program_version(Pico-Dessoldering "0.1")
@@ -50,7 +50,7 @@ target_link_libraries(Pico-Dessoldering
 
 # Add the standard include files to the build
 target_include_directories(Pico-Dessoldering PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/src
 )
 
 # Add any user requested libraries
