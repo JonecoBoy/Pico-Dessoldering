@@ -5,6 +5,28 @@
 #include "ssd1306.h"
 #include <stdio.h>
 
+static const float SUPPLY_VOLTAGE = 3.3f;
+static const float R4_PULLUP = 75.0f;
+static const float R3_GROUND = 75.0f;
+
+static float adc_raw_to_voltage(uint16_t raw) {
+  return raw * (SUPPLY_VOLTAGE / 4095.0f);
+}
+
+static float adc_voltage_to_parallel_resistance(float voltage) {
+  if (voltage <= 0.0f || voltage >= SUPPLY_VOLTAGE) {
+    return -1.0f;
+  }
+  return R4_PULLUP * voltage / (SUPPLY_VOLTAGE - voltage);
+}
+
+static float parallel_to_sensor_resistance(float rp) {
+  if (rp <= 0.0f || rp >= R3_GROUND) {
+    return -1.0f;
+  }
+  return (R3_GROUND * rp) / (R3_GROUND - rp);
+}
+
 // I2C Defines: i2c0 on GP4 (SDA) and GP5 (SCL)
 #define I2C_PORT i2c0
 #define I2C_SDA_PIN 4
@@ -42,6 +64,11 @@ int main() {
   gpio_init(PUMP_PIN);
   gpio_set_dir(PUMP_PIN, GPIO_OUT);
   gpio_put(PUMP_PIN, 0);
+
+  gpio_init(IRON_PIN);
+  gpio_set_dir(IRON_PIN, GPIO_OUT);
+  gpio_put(IRON_PIN, 0);
+
 
   // Initialize Button inputs on GPIO16 and GPIO1 (Internal Pull-Up, active LOW)
   gpio_init(BUTTON_PIN);
@@ -106,7 +133,15 @@ int main() {
     // Select sensor channel and read its value
     adc_select_input(SENSOR_ADC_CHAN);
     uint16_t adc_raw = adc_read();
-    float voltage = adc_raw * (3.3f / 4095.0f);
+    float voltage = adc_raw_to_voltage(adc_raw);
+    float sensor_r = -1.0f;
+    bool sensor_valid = false;
+
+    float rp = adc_voltage_to_parallel_resistance(voltage);
+    if (rp > 0.0f && rp < R3_GROUND) {
+      sensor_r = parallel_to_sensor_resistance(rp);
+      sensor_valid = sensor_r > 0.0f;
+    }
 
     // Select knob channel and read its value
     adc_select_input(KNOB_ADC_CHAN);
@@ -114,8 +149,9 @@ int main() {
     float voltage_knob = adc_knob * (3.3f / 4095.0f);
 
     // Sound buzzer and activate pump when button is pressed
-    gpio_put(BUZZER_PIN, button_pressed);
-    gpio_put(PUMP_PIN, button_pressed);
+    // gpio_put(BUZZER_PIN, button_pressed);
+    // gpio_put(PUMP_PIN, button_pressed);
+    gpio_put(IRON_PIN, !button_pressed);
 
     // Update only dynamic parts of the display on the refresh interval
     if (display_ready) {
@@ -135,21 +171,30 @@ int main() {
         ssd1306_draw_string(&disp, 12, 4, "PICO DESSOLDERING");
 
         // Dynamic THR value
-        char adc_str[24];
+        char adc_str[32];
         snprintf(adc_str, sizeof(adc_str), "THR: %4d (%1.2fV)", adc_raw, voltage);
         ssd1306_draw_string(&disp, 10, 18, adc_str);
 
+        // Dynamic sensor resistance value
+        char res_str[32];
+        if (sensor_valid) {
+          snprintf(res_str, sizeof(res_str), "R: %5.1f ohm", sensor_r);
+        } else {
+          snprintf(res_str, sizeof(res_str), "R: --- ohm");
+        }
+        ssd1306_draw_string(&disp, 10, 30, res_str);
+
         // Dynamic KNB value
-        char adc_str2[24];
+        char adc_str2[32];
         snprintf(adc_str2, sizeof(adc_str2), "KNB: %4d (%1.2fV)", adc_knob,
                  voltage_knob);
-        ssd1306_draw_string(&disp, 10, 34, adc_str2);
+        ssd1306_draw_string(&disp, 10, 42, adc_str2);
 
         // Trigger status
         char trg_str[28];
         snprintf(trg_str, sizeof(trg_str), "TRG:%s GP16:%d GP1:%d",
                  button_pressed ? "ON " : "OFF", val16, val1);
-        ssd1306_draw_string(&disp, 6, 48, trg_str);
+        ssd1306_draw_string(&disp, 6, 56, trg_str);
         // Show updated frame
         ssd1306_show(&disp);
       }
